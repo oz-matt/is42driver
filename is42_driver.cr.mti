@@ -1,0 +1,19 @@
+D:/cinnabon_fpga/tests/is42driver.vhd {1 {vcom -work is42 -2002 -explicit -stats=none D:/cinnabon_fpga/tests/is42driver.vhd
+Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
+-- Loading package STANDARD
+-- Loading package TEXTIO
+-- Loading package std_logic_1164
+-- Compiling entity is42driver
+-- Compiling architecture RTL of is42driver
+
+} {} {}} D:/cinnabon_fpga/tests/is42tb.vhd {0 {vcom -work is42 -2002 -explicit -stats=none D:/cinnabon_fpga/tests/is42tb.vhd
+Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
+-- Loading package STANDARD
+-- Loading package TEXTIO
+-- Loading package std_logic_1164
+-- Compiling entity is42tb
+-- Compiling architecture behave of is42tb
+** Error: D:/cinnabon_fpga/tests/is42tb.vhd(21): (vcom-1136) Unknown identifier "is42".
+** Error: D:/cinnabon_fpga/tests/is42tb.vhd(51): VHDL Compiler exiting
+
+} {8.0 10.0} {}}
