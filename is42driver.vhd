@@ -3,18 +3,22 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 
 entity is42driver is
-  generic (
-    inclk_mhz : positive  
-  );
   port (
   
-    iclk : in std_logic;
-    
-	dram_addr : out std_logic_vector(12 downto 0);
+    iclk : in std_logic; -- From FPGA
+	rdy : out std_logic;
+	   
+	   in_addr : in std_logic_vector(12 downto 0);
+	   in_mosi : in std_logic_vector(31 downto 0);
+	   in_exec : in std_logic;
+	   in_wbit : in std_logic;
+	   
+	   out_miso : out std_logic_vector(31 downto 0);
+  
+	dram_addr : out std_logic_vector(12 downto 0); -- To DRAM
 	dram_ba : out std_logic_vector(1 downto 0);
 	dram_dq : inout std_logic_vector(31 downto 0);
 	dram_dqm : out std_logic_vector(3 downto 0);
-
     dram_ncas : out std_logic;
     dram_cke : out std_logic;
     dram_clk : out std_logic;
@@ -22,9 +26,11 @@ entity is42driver is
     dram_nras : out std_logic;
     dram_nwe : out std_logic
   );
-end is42driver;
+end entity;
 
 architecture RTL of is42driver is
+
+  signal r_rdy : std_logic := '0';
  
   signal r_dram_ncs : std_logic := '0';
   signal r_dram_cke : std_logic := '0';
@@ -36,11 +42,15 @@ architecture RTL of is42driver is
   signal r_dram_addr : std_logic_vector(12 downto 0) := "0000000000000";
   signal r_dram_ba : std_logic_vector(1 downto 0) := "00";
   
+  signal r_dram_dq : std_logic_vector(31 downto 0) := X"00000000";
+  signal r_out_miso : std_logic_vector(31 downto 0) := X"00000000";
+ 
   -- State machine nodes
   
   type DRAM_STATE is (INIT, IGNITION, STARTWAIT100US, STARTINITIALNOP,
 		FINISHWAIT, INITPRECHARGE, WAITTRD, AUTORE1, WAITAR1, AUTORENOP, 
-		WAITAR2, AUTORE2);
+		WAITARN1, AUTORE2, WAITAR2, AUTORENOP2, WAITARN2, MODESEL, 
+		WAITMSEL, MSELNOP, WAITMSN, ACTIVATE, INITCOMP);
   signal curr_state: DRAM_STATE := INIT;
   
   -- IS24 commands
@@ -55,7 +65,7 @@ architecture RTL of is42driver is
   constant cmd_aref : std_logic_vector(4 downto 0) := "10001"; -- Requires CKE high for >=1 clkcycle prior (no transition allowed)
   
   -- Clock counter
-  signal clkctr: natural range 0 to (inclk_mhz * 101) := 0;
+  signal clkctr: natural range 0 to (5100) := 0;
 
 
 begin
@@ -76,8 +86,9 @@ begin
 
   begin
 
+ 
 
-	if rising_edge(iclk) then
+	if falling_edge(iclk) then
 	  
 	  case curr_state is
 	    when INIT =>
@@ -89,7 +100,7 @@ begin
 		  curr_state <= STARTWAIT100US;
 		  
 		when STARTWAIT100US =>
-		  if clkctr > (inclk_mhz * 5) then
+		  if clkctr > (50) then
 		    clkctr <= 0;
 		    curr_state <= STARTINITIALNOP;
 	      else
@@ -101,7 +112,7 @@ begin
           curr_state <= FINISHWAIT;		
 		
 		when FINISHWAIT =>
-		  if clkctr > (inclk_mhz * 100) then
+		  if clkctr > (5000) then
 		    clkctr <= 0;
 		    curr_state <= INITPRECHARGE;
 	      else
@@ -114,7 +125,7 @@ begin
 		  curr_state <= WAITTRD;
 		  
 		when WAITTRD =>
-		  if clkctr > (inclk_mhz * 1) then -- Wait minimum 18ns
+		  if clkctr > (2) then -- Wait minimum 18ns
 		    clkctr <= 0;
 		    curr_state <= AUTORE1;
 	      else
@@ -123,10 +134,10 @@ begin
 		  
 		when AUTORE1 =>
 		  sendcmd(cmd_aref);
-		  curr_state => WAITAR1;
+		  curr_state <= WAITAR1;
 		  
 		when WAITAR1 =>
-		  if clkctr > (inclk_mhz * 1) then -- Wait minimum 18ns
+		  if clkctr > (4) then -- Wait minimum 60ns/2
 		    clkctr <= 0;
 		    curr_state <= AUTORENOP;
 	      else
@@ -135,10 +146,10 @@ begin
 		  
 		when AUTORENOP =>
 		  sendcmd(cmd_nop);
-		  curr_state => WAITAR1;
+		  curr_state <= WAITARN1;
 
-        when WAITAR2 =>
-		  if clkctr > (inclk_mhz * 1) then -- Wait minimum 18ns
+        when WAITARN1 =>
+		  if clkctr > (4) then -- Wait minimum 60ns/2
 		    clkctr <= 0;
 		    curr_state <= AUTORE2;
 	      else
@@ -147,23 +158,98 @@ begin
 		  
 		when AUTORE2 =>
 		  sendcmd(cmd_aref);
-		  curr_state => WAITAR1;
+		  curr_state <= WAITAR2;
+		  
+		when WAITAR2 =>
+		  if clkctr > (4) then -- Wait minimum 60ns/2
+		    clkctr <= 0;
+		    curr_state <= AUTORENOP2;
+	      else
+			clkctr <= clkctr + 1;
+		  end if;
+		  
+		when AUTORENOP2 =>
+		  sendcmd(cmd_nop);
+		  curr_state <= WAITARN2;
+		  
+		when WAITARN2 =>
+		  if clkctr > (4) then -- Wait minimum 60ns/2
+		    clkctr <= 0;
+		    curr_state <= MODESEL;
+	      else
+			clkctr <= clkctr + 1;
+		  end if;
+		  
+		when MODESEL =>
+		  sendcmd(cmd_mrs); -- Send mode select command
+			r_dram_ba(0) <= '0'; -- Set reserved pins to 0 per datasheet
+			r_dram_ba(1) <= '0';
+			r_dram_addr(12) <= '0';
+			r_dram_addr(11) <= '0';
+			r_dram_addr(10) <= '0';
 
-
-		  end case;
+			r_dram_addr(9) <= '1'; -- Single Location Address mode
+			
+			r_dram_addr(8) <= '0'; -- Std operation
+			r_dram_addr(7) <= '0';
+			
+			r_dram_addr(6) <= '0'; -- 2clk data latency since 100<MHz operation
+			r_dram_addr(5) <= '1';
+			r_dram_addr(4) <= '0';
+			
+			r_dram_addr(3) <= '0'; -- 1 byte r/w format
+			r_dram_addr(2) <= '0';
+			r_dram_addr(1) <= '0';
+			r_dram_addr(0) <= '0';
+			curr_state <= WAITMSEL;
+			
+			
+	    when WAITMSEL =>
+		  if clkctr > (2) then -- Wait minimum 14ns/2
+		    clkctr <= 0;
+		    curr_state <= MSELNOP;
+	      else
+			clkctr <= clkctr + 1;
+		  end if;
+		  
+		when MSELNOP =>
+		  sendcmd(cmd_nop);
+		  curr_state <= WAITMSN;
+		  
+		when WAITMSN =>
+		  if clkctr > (2) then -- Wait minimum 14ns/2
+		    clkctr <= 0;
+		    curr_state <= ACTIVATE;
+	      else
+			clkctr <= clkctr + 1;
+		  end if;
+			
+		when ACTIVATE => -- Ready for r/w commands
+		  sendcmd(cmd_act);
+		  r_rdy <= '1';
+		  curr_state <= INITCOMP;
+		  
+		when INITCOMP =>
+		
+		
+		  		  
+		end case;
 	
 	end if;
   end process dram_machine;
-
-    dram_dqm <= r_dram_dqm;
-    dram_addr <= r_dram_addr;
-    dram_ba <= r_dram_ba;
+  
+  rdy <= r_rdy;
+  out_miso <= r_out_miso;
+  
+  dram_dqm <= r_dram_dqm;
+  dram_addr <= r_dram_addr;
+  dram_ba <= r_dram_ba;
 	
-    dram_ncas <= r_dram_ncas;
-    dram_cke <= r_dram_cke;
-    dram_clk <= iclk;
-    dram_ncs <= r_dram_ncs;
-    dram_nras <= r_dram_ncas;
-    dram_nwe <= r_dram_nwe;
+  dram_ncas <= r_dram_ncas;
+  dram_cke <= r_dram_cke;
+  dram_clk <= iclk;
+  dram_ncs <= r_dram_ncs;
+  dram_nras <= r_dram_nras;
+  dram_nwe <= r_dram_nwe;
   
 end RTL;
