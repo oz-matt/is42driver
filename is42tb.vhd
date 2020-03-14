@@ -11,6 +11,7 @@ architecture behave of is42tb is
   
   signal r_addr : std_logic_vector(12 downto 0) := "0000000000000";
   signal r_data_mosi : std_logic_vector(31 downto 0) := X"00000000";
+  signal r_ba : std_logic_vector(1 downto 0) := "00";
   signal r_exec : std_logic := '0';
   signal r_wbit : std_logic := '1';
 
@@ -28,7 +29,6 @@ architecture behave of is42tb is
   signal w_dram_clk : std_logic;
   signal w_dram_dataq : std_logic_vector(31 downto 0);
   
-  
 begin
 
   is42_inst : entity work.is42driver
@@ -38,7 +38,8 @@ begin
 	   
 	   in_addr => r_addr,
 	   in_mosi => r_data_mosi,
-	   in_exec => r_exec,
+	   in_ba => r_ba,
+    	in_exec => r_exec,
 	   in_wbit => r_wbit,
 	   
 	   out_miso => w_data_miso,
@@ -62,7 +63,37 @@ begin
    process is
    begin
    
-   wait for 20 us;
+   wait for 104 us;
+
+   r_exec <= '1';
+   r_addr <= "0000000000111";
+   r_data_mosi <= X"ABABABAB";
+   r_ba <= "10";
+   r_wbit <= '1';
+   
+   wait for 40 ns;
+   
+   r_exec <= '0';
+   r_addr <= "0000000000000";
+   r_data_mosi <= X"00000000";
+   r_ba <= "00";
+   r_wbit <= '0';
+   
+   wait for 200 ns;
+   
+   r_exec <= '1';
+   r_addr <= "0000000000111";
+   r_data_mosi <= X"00000000";
+   r_ba <= "10";
+   r_wbit <= '0';
+   
+   wait for 40 ns;
+   
+   r_exec <= '0';
+   r_addr <= "0000000000000";
+   r_data_mosi <= X"00000000";
+   r_ba <= "00";
+   r_wbit <= '0';
    
    end process;
    

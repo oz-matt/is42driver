@@ -57,7 +57,7 @@ architecture RTL of is42driver is
 		FINISHWAIT, INITPRECHARGE, WAITTRD, AUTORE1, WAITAR1, AUTORENOP, 
 		WAITARN1, AUTORE2, WAITAR2, AUTORENOP2, WAITARN2, MODESEL, 
 		WAITMSEL, MSELNOP, WAITMSN, ACTIVATE, INITCOMP, EXECWRITE,
-		WRITEWAIT1, WRITEWAIT2, EXECREAD, READWAIT);
+		WRITEWAIT1, WRITEWAIT2, EXECREAD);
   signal curr_state: DRAM_STATE := INIT;
   
   -- IS24 commands
@@ -237,19 +237,19 @@ begin
 		  curr_state <= INITCOMP;
 		  
 		when INITCOMP =>
-		r_out_miso <= X"00000000";
-		  if (in_exec = '1') then
+		  if (in_exec = 1) then
             r_rdy <= '0';
             ir_addr <= in_addr;
             ir_wbit <= in_wbit;
 			ir_ba <= in_ba;
-            if (in_wbit = '1') then
+            if (in_wbit == 1) then
               curr_state <= EXECWRITE;
 			  ir_mosi <= in_mosi;
             else
               curr_state <= EXECREAD;
             end if;		
           end if;			
+		  
 		  
 		when EXECWRITE =>
 		  sendcmd(cmd_write);
@@ -274,22 +274,8 @@ begin
 		  end if;
 		
 		when EXECREAD =>
-		  sendcmd(cmd_read);
-		  r_dram_ba <= ir_ba;
-		  r_dram_addr <= ir_addr;
-		  curr_state <= READWAIT;
-		  
-		when READWAIT =>
-		  sendcmd(cmd_nop);
-		  if clkctr > (1) then
-		    clkctr <= 0;
-			r_out_miso <= dram_dq;
-			r_rdy <= '1';
-		    curr_state <= INITCOMP;
-	      else
-			clkctr <= clkctr + 1;
-		  end if;
-		  
+		
+		  		  
 		end case;
 	
 	end if;
@@ -299,7 +285,6 @@ begin
   out_miso <= r_out_miso;
   
   dram_dqm <= r_dram_dqm;
-  dram_dq <= r_dram_dq;
   dram_addr <= r_dram_addr;
   dram_ba <= r_dram_ba;
 	
