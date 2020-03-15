@@ -1,4 +1,3 @@
--- Code your design here
 library IEEE;
 use IEEE.std_logic_1164.all;
 
@@ -119,7 +118,7 @@ begin
           curr_state <= FINISHWAIT;		
 		
 		when FINISHWAIT =>
-		  if clkctr > (5000) then
+		  if clkctr > (5000) then -- Wait minimum 100us
 		    clkctr <= 0;
 		    curr_state <= INITPRECHARGE;
 	      else
@@ -128,6 +127,7 @@ begin
 		  
 		when INITPRECHARGE =>
 		  sendcmd(cmd_pre);
+		  r_dram_dqm <= "0000";
 		  r_dram_addr(10) <= '1'; -- Precharge all banks
 		  curr_state <= WAITTRD;
 		  
